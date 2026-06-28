@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "clcd.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -41,15 +40,30 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim3;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+enum Notes
+{
+	C4 = 26163,// 도(261.63 Hz)
+	D4 = 29366,// 레(293.66 Hz)
+	E4 = 32963,// 미(329.63 Hz)
+	F4 = 34923,// 파(349.23 Hz)
+	G4 = 39200,// 솔(392.00 Hz)
+	A4 = 44000,// 라(440.00 Hz)
+	B4 = 49388,// 시(493.38 Hz)
+	C5 = 52325  // 도(523.25 Hz)
+};
 /* USER CODE END PV */
-
+enum Notes SchoolBell[] = {G4, G4, A4, A4, G4, G4, E4, G4, G4, E4, E4, D4,
+		G4, G4, A4, A4, G4, G4, E4, D4, E4, C4
+};
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_TIM3_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -74,7 +88,8 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  HAL_Init();
+
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -88,13 +103,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM3_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  CLCD_Init(16,2);
-  HAL_Delay(10);
 
-  CLCD_Puts(0,0,"HELLO! KKU");
-  CLCD_Puts(0,1,"HI HI");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -102,7 +114,16 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+	  for(uint8_t i=0; i<sizeof(SchoolBell) / sizeof(enum Notes); i++) {
+		  __HAL_TIM_SET_AUTORELOAD(&htim3,(int)(1000000 / SchoolBell[i]*100)); //PWM Frequency set
 
+		  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000000 / SchoolBell[i]*100 / 2);  //PWM Cuty set to 50%.
+		  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);//PLAY the one Note.
+		  HAL_Delay(500);
+
+		  HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_2); //STOP the one Note.
+		  HAL_Delay(10);
+	  }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -152,6 +173,65 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 84-1;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 0;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
 }
 
 /**
@@ -206,8 +286,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|CLCD_RS_Pin|CLCD_EN_Pin|CLCD_D0_Pin
-                          |CLCD_D1_Pin|CLCD_D2_Pin|CLCD_D3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -215,14 +294,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD2_Pin CLCD_RS_Pin CLCD_EN_Pin CLCD_D0_Pin
-                           CLCD_D1_Pin CLCD_D2_Pin CLCD_D3_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin|CLCD_RS_Pin|CLCD_EN_Pin|CLCD_D0_Pin
-                          |CLCD_D1_Pin|CLCD_D2_Pin|CLCD_D3_Pin;
+  /*Configure GPIO pin : LD2_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
